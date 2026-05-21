@@ -1,88 +1,85 @@
 # Sail Racing Telemetry Analytics Demo
 
-## Project Purpose
+**v1.0 - Open Telemetry Analytics Framework Prototype**
 
-This project is a Streamlit prototype inspired by high-performance SailGP-style analytics.
-It shows how simulated on-water telemetry can be transformed into tactical performance
-insight using lightweight Python analytics.
+## What this is
 
-The demo is intentionally simple, local, and dependency-light while still feeling like
-an executive-ready telemetry review experience.
+This repository is a lightweight, portfolio-ready prototype of an open telemetry
+analytics framework for high-performance sailing. It combines:
+
+- a canonical telemetry schema
+- a modular ingestion layer
+- reusable analytics modules
+- replay and visualization helpers
+- a Streamlit example app that demonstrates end-to-end workflows
+
+The current implementation uses simulated telemetry and is designed to be clear,
+extensible, and practical for rapid sports-technology prototyping.
+
+## Why telemetry matters in high-performance sailing
+
+Modern high-performance sailing teams rely on telemetry to answer tactical and
+coaching questions quickly: where speed was gained/lost, how maneuvers affected
+race position, how wind shifts changed outcomes, and which settings delivered
+consistent VMG in each race mode.
+
+### Why this matters
+
+High-performance sailing teams, coaches, analysts, race organizers, and fan-
+experience teams need ways to transform raw telemetry into actionable insight.
 
 ## Features
 
-- Polished multi-section Streamlit dashboard
-- Generated sample telemetry with race-course coordinates and weather context
-- KPI overview for speed, VMG, and maneuver loss
-- Race replay with:
-  - boat tracks
-  - current positions
-  - timestamp slider
-  - boat filtering
-  - optional leg coloring
-  - optional wind-direction arrows
-- Maneuver event detection (tacks/gybes) with markers and metrics:
-  - entry speed
-  - exit speed
-  - speed loss
-  - recovery time estimate
-- Lightweight anomaly detection:
-  - sudden speed drop
-  - abnormal heel angle
-  - poor VMG for wind-angle regime
-  - possible foil instability pattern
-- Live streaming simulation mode:
-  - start/stop/reset
-  - playback speed
-  - current timestamp and live KPI panel
-  - rolling live chart window
-- Team-vs-team comparison:
-  - side-by-side metric cards
-  - comparison table
-  - grouped comparison chart
-- Predictive "Optimal VMG Zone" analysis:
-  - TWA vs VMG with highlighted target bands
-  - best upwind/downwind target ranges
-  - best TWA band by wind regime
-- Weather overlays and weather timeline chart (simulated)
+- Canonical telemetry schema validation and normalization
+- Simulated multi-boat race telemetry generation
+- CSV ingestion with a unified ingest interface
+- Modular analytics for:
+  - KPIs and leg summaries
+  - maneuver detection and loss estimation
+  - anomaly detection
+  - VMG banding and target zone recommendations
+  - weather overlays
+  - boat/team comparison
+- Replay-ready track helpers
+- Reusable Plotly visualization functions independent of Streamlit
+- Streamlit demo app with live simulation controls
 
-## Project Structure
+## Framework architecture
 
-- `app.py` - Streamlit app and UI sections
-- `data_generator.py` - simulated telemetry generation (boats, race track, weather)
-- `analytics.py` - validation, maneuvers, anomalies, comparison, and predictive analytics
-- `export_sample_csv.py` - helper script to export generated telemetry CSV
-- `requirements.txt` - runtime dependencies
-- `IMPLEMENTATION_PLAN.md` - original implementation plan
-
-## How to Run
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+```text
+sail-racing-telemetry-analytics-demo/
+  app.py
+  README.md
+  requirements.txt
+  runtime.txt
+  sample_data/
+    sailing_telemetry_sample.csv
+  sailing_telemetry/
+    __init__.py
+    schema.py
+    generator.py
+    ingestion.py
+    replay.py
+    visualization.py
+    utils.py
+    analytics/
+      __init__.py
+      metrics.py
+      maneuvers.py
+      anomalies.py
+      vmg.py
+      weather.py
+      comparison.py
+  tests/
+    test_schema.py
+    test_metrics.py
+    test_maneuvers.py
+    test_anomalies.py
 ```
 
-The app runs with generated sample data by default, so no upload is required.
+## Telemetry schema
 
-## Generate a Sample CSV
-
-Create a CSV file for testing the upload path:
-
-```bash
-python export_sample_csv.py --output sample_telemetry.csv
-```
-
-Custom example:
-
-```bash
-python export_sample_csv.py --output demo_data/telemetry.csv --boats 6 --legs 8 --points-per-leg 140 --freq-seconds 2 --seed 7
-```
-
-## Simulated Data Schema
-
-Generated telemetry includes:
+Canonical columns:
 
 - `timestamp`
 - `boat_id`
@@ -104,14 +101,77 @@ Generated telemetry includes:
 - `course_side`
 - `sea_state`
 
-Notes:
+The schema module provides:
 
-- This is simulated telemetry for demo and prototyping use.
-- Analytics outputs are intentionally simplified and should not be treated as production race models.
+- `get_required_columns()`
+- `get_optional_columns()`
+- `validate_telemetry_dataframe(df)`
+- `normalize_telemetry_dataframe(df)`
 
-## Why This Matters
+## Analytics modules
 
-SailGP-class teams ingest large telemetry streams in real time and post-race review.
-This demo mirrors that workflow at a lightweight level: it links raw sensor-style data
-to clear tactical questions such as maneuver quality, wind-adjusted VMG performance,
-anomaly identification, and team-vs-team deltas.
+- `metrics.py`: KPI summaries, boat/leg aggregations, VMG efficiency
+- `maneuvers.py`: explicit/inferred maneuver detection and recovery estimation
+- `anomalies.py`: robust detection for speed, heel, VMG, and foil-instability
+- `vmg.py`: TWA/wind banding, optimal zone estimation, target recommendations
+- `weather.py`: weather summaries, gust windows, wind-shift periods
+- `comparison.py`: boat/team comparison tables
+
+## How to run locally
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Optional: regenerate sample CSV
+
+```bash
+python export_sample_csv.py --output sample_data/sailing_telemetry_sample.csv
+```
+
+Optional: run tests
+
+```bash
+python -m pytest
+```
+
+## How to deploy on Streamlit Community Cloud
+
+1. Push this repository to GitHub.
+2. In Streamlit Community Cloud, create a new app from this repo.
+3. Use:
+   - Branch: `master`
+   - Main file: `app.py`
+4. Confirm `runtime.txt` and `requirements.txt` are detected.
+5. Deploy and monitor logs.
+
+This repo pins Python via `runtime.txt` (`python-3.12`) to avoid wheel build
+issues on unsupported interpreter versions.
+
+## Example use cases
+
+- Coach and crew maneuver debriefs
+- Team-on-team comparative performance reviews
+- Event analytics demos for race organizers
+- Fan-facing replay prototypes with telemetry overlays
+
+## Roadmap
+
+- NMEA 0183 / NMEA 2000 adapter
+- GPX import
+- Expedition/B&G/Garmin/Raymarine/Sailmon import adapters
+- WebSocket live telemetry ingestion
+- cloud streaming backend
+- coach debrief reports
+- fan-facing race replay mode
+- ML-assisted anomaly detection
+- tactical routing simulation
+- 3D replay
+
+## Disclaimer
+
+This project uses simulated data for demonstration and prototyping only.
+It is not affiliated with SailGP.

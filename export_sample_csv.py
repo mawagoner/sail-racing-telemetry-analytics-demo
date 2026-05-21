@@ -1,20 +1,23 @@
-"""Export generated sail racing telemetry to a CSV file."""
+"""Export generated sample telemetry to CSV for demo/testing workflows."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from analytics import validate_and_normalize_telemetry
-from data_generator import generate_sample_telemetry
+from sailing_telemetry.generator import generate_sample_telemetry
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate sample sail racing telemetry and save it as CSV.",
+        description="Generate sample sailing telemetry and save as CSV.",
     )
-    parser.add_argument("--output", default="sample_telemetry.csv", help="Output CSV path")
-    parser.add_argument("--boats", type=int, default=3, help="Number of boats")
+    parser.add_argument(
+        "--output",
+        default="sample_data/sailing_telemetry_sample.csv",
+        help="Output CSV path",
+    )
+    parser.add_argument("--boats", type=int, default=5, help="Number of boats")
     parser.add_argument("--legs", type=int, default=6, help="Legs per boat")
     parser.add_argument(
         "--points-per-leg",
@@ -38,12 +41,11 @@ def main() -> None:
     args = parse_args()
     telemetry = generate_sample_telemetry(
         num_boats=args.boats,
-        leg_count=args.legs,
-        points_per_leg=args.points_per_leg,
-        freq_seconds=args.freq_seconds,
+        legs_per_boat=args.legs,
+        samples_per_leg=args.points_per_leg,
+        sampling_interval_seconds=args.freq_seconds,
         seed=args.seed,
     )
-    telemetry = validate_and_normalize_telemetry(telemetry)
 
     output_path = Path(args.output).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
