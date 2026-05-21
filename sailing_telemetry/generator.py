@@ -1,4 +1,8 @@
-"""Sample telemetry generator for high-performance sailing demos."""
+"""Sample telemetry generator for high-performance sailing demos.
+
+The generator can optionally inject quality issues to simulate real-world feeds
+with missing values, out-of-order packets, and duplicates.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,8 @@ import numpy as np
 import pandas as pd
 
 from .schema import normalize_telemetry_dataframe
+
+KNOTS_PER_MPS = 1.943844
 
 TEAM_NAMES = [
     "Apex Wave Racing",
@@ -44,12 +50,74 @@ def _generate_course_weather(total_points: int, rng: np.random.Generator) -> pd.
     )
 
 
+def _inject_data_issues(
+    frame: pd.DataFrame,
+    rng: np.random.Generator,
+    issue_rate: float,
+) -> pd.DataFrame:
+    """Inject missing, duplicate, and out-of-order rows for ingestion testing."""
+    dirty = frame.copy()
+    if dirty.empty:
+        return dirty
+
+    issue_rate = float(max(0.0, min(issue_rate, 0.5)))
+    issue_size = max(1, int(len(dirty) * issue_rate))
+
+    numeric_candidates = [
+        "speed_knots",
+        "vmg",
+        "true_wind_speed",
+        "true_wind_angle",
+        "heading",
+        "heel_angle",
+        "foil_cant",
+    ]
+    numeric_candidates = [column for column in numeric_candidates if column in dirty.columns]
+    missing_per_column = max(1, issue_size // max(2, len(numeric_candidates)))
+
+    for column in numeric_candidates:
+        idx = rng.choice(dirty.index.to_numpy(), size=min(missing_per_column, len(dirty)), replace=False)
+        dirty.loc[idx, column] = np.nan
+
+    if "maneuver_type" in dirty.columns:
+        idx = rng.choice(dirty.index.to_numpy(), size=min(max(1, issue_size // 6), len(dirty)), replace=False)
+        dirty.loc[idx, "maneuver_type"] = "NONE "
+    if "course_side" in dirty.columns:
+        idx = rng.choice(dirty.index.to_numpy(), size=min(max(1, issue_size // 6), len(dirty)), replace=False)
+        dirty.loc[idx, "course_side"] = "STARBOARD "
+    if "team_name" in dirty.columns:
+        idx = rng.choice(dirty.index.to_numpy(), size=min(max(1, issue_size // 6), len(dirty)), replace=False)
+        dirty.loc[idx, "team_name"] = ""
+
+    if "timestamp" in dirty.columns:
+        idx = rng.choice(dirty.index.to_numpy(), size=min(max(1, issue_size // 5), len(dirty)), replace=False)
+        offsets = rng.integers(-8, 9, size=len(idx))
+        dirty.loc[idx, "timestamp"] = pd.to_datetime(dirty.loc[idx, "timestamp"], utc=True) + pd.to_timedelta(
+            offsets,
+            unit="s",
+        )
+
+    duplicate_count = min(max(1, issue_size // 5), len(dirty))
+    duplicate_idx = rng.choice(dirty.index.to_numpy(), size=duplicate_count, replace=False)
+    duplicates = dirty.loc[duplicate_idx].copy()
+    dirty = pd.concat([dirty, duplicates], ignore_index=True)
+
+    shuffle_count = min(max(2, issue_size // 3), len(dirty))
+    shuffle_idx = rng.choice(dirty.index.to_numpy(), size=shuffle_count, replace=False)
+    shuffled_block = dirty.loc[shuffle_idx].sample(frac=1.0, random_state=int(rng.integers(0, 1_000_000)))
+    dirty.loc[shuffle_idx] = shuffled_block.to_numpy()
+    return dirty.reset_index(drop=True)
+
+
 def generate_sample_telemetry(
     num_boats: int = 5,
     legs_per_boat: int = 6,
     samples_per_leg: int = 120,
     sampling_interval_seconds: int = 2,
     seed: int = 42,
+    inject_data_issues: bool = False,
+    issue_rate: float = 0.02,
+    normalize: bool = True,
 ) -> pd.DataFrame:
     """Generate simulated race telemetry aligned to the canonical schema."""
     if num_boats < 1:
@@ -220,4 +288,9 @@ def generate_sample_telemetry(
             current_sign *= -1
 
     telemetry = pd.concat(frames, ignore_index=True)
-    return normalize_telemetry_dataframe(telemetry)
+    if inject_data_issues:
+        telemetry = _inject_data_issues(telemetry, rng=rng, issue_rate=issue_rate)
+
+    if normalize:
+        return normalize_telemetry_dataframe(telemetry)
+    return telemetry.reset_index(drop=True)

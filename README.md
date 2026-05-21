@@ -33,6 +33,10 @@ experience teams need ways to transform raw telemetry into actionable insight.
 - Canonical telemetry schema validation and normalization
 - Simulated multi-boat race telemetry generation
 - CSV ingestion with a unified ingest interface
+- Adapter-registry ingestion pipeline (CSV/JSON active, GPX/NMEA placeholders)
+- Source-profile mapping for vendor-style telemetry variants
+- Bronze -> Silver -> Gold cleansing stages
+- Data quality scoring and integration report artifacts
 - Modular analytics for:
   - KPIs and leg summaries
   - maneuver detection and loss estimation
@@ -43,6 +47,15 @@ experience teams need ways to transform raw telemetry into actionable insight.
 - Replay-ready track helpers
 - Reusable Plotly visualization functions independent of Streamlit
 - Streamlit demo app with live simulation controls
+
+Ingestion v1.1 highlights:
+
+- Adapter registry (`sailing_telemetry/adapters.py`)
+- Source profile metadata (`sailing_telemetry/source_profiles.py`)
+- Unit/sign normalization and value mapping
+- Optional cadence alignment with interpolation
+- Row-level quality flags and quality summary metrics
+- Integration report artifact containing applied transformations and counts
 
 ## Framework architecture
 

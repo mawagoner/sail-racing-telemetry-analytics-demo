@@ -123,14 +123,13 @@ def _normalize_strings(frame: pd.DataFrame) -> pd.DataFrame:
     for column in STRING_COLUMNS:
         frame[column] = frame[column].astype(str).str.strip()
 
-    frame.loc[frame["boat_id"] == "", "boat_id"] = np.nan
-    frame.loc[frame["team_name"] == "", "team_name"] = np.nan
-    frame.loc[frame["leg_id"] == "", "leg_id"] = np.nan
+    for column in ["boat_id", "team_name", "leg_id", "leg_mode", "course_side"]:
+        frame.loc[frame[column].str.lower().isin(["", "nan", "none", "nat"]), column] = np.nan
 
-    frame["maneuver_type"] = frame["maneuver_type"].replace("", np.nan).fillna("none")
+    frame.loc[frame["maneuver_type"].str.lower().isin(["", "nan", "nat"]), "maneuver_type"] = np.nan
+    frame["maneuver_type"] = frame["maneuver_type"].fillna("none")
     frame["maneuver_type"] = frame["maneuver_type"].str.lower()
 
-    frame["course_side"] = frame["course_side"].replace("", np.nan)
     default_course_side = pd.Series(
         np.where(frame["true_wind_angle"] >= 0.0, "starboard", "port"),
         index=frame.index,

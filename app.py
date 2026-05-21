@@ -8,7 +8,7 @@ import time
 import pandas as pd
 import streamlit as st
 
-from sailing_telemetry import __version__, ingest_telemetry
+from sailing_telemetry import __version__, ingest_telemetry, list_source_profiles
 from sailing_telemetry.analytics import (
     calculate_vmg_bands,
     compare_boats,
@@ -40,13 +40,15 @@ st.set_page_config(page_title="Sail Racing Telemetry Analytics Demo", layout="wi
 
 
 @st.cache_data(show_spinner=False)
-def load_sample_data(config: dict[str, int]) -> pd.DataFrame:
-    return ingest_telemetry("sample", config=config)
+def load_sample_data(config: dict[str, object]) -> tuple[pd.DataFrame, dict[str, object], pd.DataFrame]:
+    artifact = ingest_telemetry("sample", config=config, return_artifact=True)
+    return artifact.gold_df, artifact.report, artifact.quality_flags_df
 
 
 @st.cache_data(show_spinner=False)
-def load_uploaded_csv(file_bytes: bytes) -> pd.DataFrame:
-    return ingest_telemetry(io.BytesIO(file_bytes))
+def load_uploaded_csv(file_bytes: bytes, config: dict[str, object]) -> tuple[pd.DataFrame, dict[str, object], pd.DataFrame]:
+    artifact = ingest_telemetry(io.BytesIO(file_bytes), config=config, return_artifact=True)
+    return artifact.gold_df, artifact.report, artifact.quality_flags_df
 
 
 def _initialize_live_state() -> None:
@@ -58,19 +60,26 @@ def _initialize_live_state() -> None:
         st.session_state.live_signature = ""
 
 
-def _configure_sidebar_source() -> tuple[str, dict[str, int], bytes | None]:
+def _configure_sidebar_source() -> tuple[str, dict[str, object], bytes | None]:
+    profiles = list_source_profiles()
     source_mode = st.sidebar.radio(
         "Data source",
         options=["Generated sample telemetry", "Upload CSV telemetry"],
         index=0,
     )
 
-    sample_config = {
+    sample_config: dict[str, object] = {
         "num_boats": 5,
         "legs_per_boat": 6,
         "samples_per_leg": 120,
         "sampling_interval_seconds": 2,
         "seed": 42,
+        "sample_source_profile": "canonical",
+        "source_profile": "auto",
+        "inject_data_issues": False,
+        "issue_rate": 0.02,
+        "resample_enabled": False,
+        "resample_seconds": 2,
     }
     upload_bytes: bytes | None = None
 
@@ -80,10 +89,49 @@ def _configure_sidebar_source() -> tuple[str, dict[str, int], bytes | None]:
         sample_config["samples_per_leg"] = st.sidebar.slider("Samples per leg", 60, 260, 120, step=10)
         sample_config["sampling_interval_seconds"] = st.sidebar.selectbox("Sampling interval (seconds)", [1, 2, 5], index=1)
         sample_config["seed"] = int(st.sidebar.number_input("Random seed", min_value=0, max_value=99999, value=42))
+        sample_config["sample_source_profile"] = st.sidebar.selectbox(
+            "Simulated source profile",
+            options=profiles,
+            index=profiles.index("canonical") if "canonical" in profiles else 0,
+            help="Generate canonical data or profile-shaped source variants for ingestion testing.",
+        )
+        sample_config["inject_data_issues"] = st.sidebar.checkbox(
+            "Inject realistic data issues",
+            value=False,
+            help="Inject missing values, duplicates, and out-of-order rows.",
+        )
+        sample_config["issue_rate"] = st.sidebar.slider(
+            "Issue injection rate",
+            min_value=0.0,
+            max_value=0.20,
+            value=0.02,
+            step=0.01,
+            disabled=not bool(sample_config["inject_data_issues"]),
+        )
     else:
         uploaded = st.sidebar.file_uploader("Upload telemetry CSV", type=["csv"])
         if uploaded is not None:
             upload_bytes = uploaded.getvalue()
+        profile_options = ["auto"] + profiles
+        sample_config["source_profile"] = st.sidebar.selectbox(
+            "Source profile override",
+            options=profile_options,
+            index=0,
+            help="Use auto-detection or force a known source profile.",
+        )
+
+    sample_config["resample_enabled"] = st.sidebar.checkbox(
+        "Enable time alignment/resampling",
+        value=False,
+        help="Align telemetry to fixed cadence and interpolate numeric channels.",
+    )
+    sample_config["resample_seconds"] = st.sidebar.slider(
+        "Resample seconds",
+        min_value=1,
+        max_value=10,
+        value=2,
+        disabled=not bool(sample_config["resample_enabled"]),
+    )
 
     return source_mode, sample_config, upload_bytes
 
@@ -167,12 +215,12 @@ def render() -> None:
 
     try:
         if source_mode == "Generated sample telemetry":
-            telemetry = load_sample_data(sample_config)
+            telemetry, integration_report, quality_flags = load_sample_data(sample_config)
         else:
             if upload_bytes is None:
                 st.warning("Upload a CSV file to continue.")
                 st.stop()
-            telemetry = load_uploaded_csv(upload_bytes)
+            telemetry, integration_report, quality_flags = load_uploaded_csv(upload_bytes, sample_config)
     except ValueError as error:
         st.error(f"Telemetry ingestion failed: {error}")
         st.stop()
@@ -222,6 +270,21 @@ def render() -> None:
     st.header("Data Source")
     st.write(f"Source mode: `{source_mode}`")
     st.write(f"Rows: `{len(telemetry)}` | Filtered rows: `{len(filtered)}` | Boats in filter: `{len(selected_boats)}`")
+
+    quality = integration_report.get("quality", {}) if isinstance(integration_report, dict) else {}
+    flag_counts = quality.get("flag_counts", {}) if isinstance(quality, dict) else {}
+    quality_cols = st.columns(5)
+    quality_cols[0].metric("Mean Quality", f"{quality.get('mean_quality_score', 0.0):.3f}")
+    quality_cols[1].metric("Rows w/ Issues", f"{quality.get('rows_with_issues', 0)}")
+    quality_cols[2].metric("Missing Required", f"{flag_counts.get('missing_required_fields', 0)}")
+    quality_cols[3].metric("Out-of-Range Speed", f"{flag_counts.get('out_of_range_speed', 0)}")
+    quality_cols[4].metric("Timestamp Jumps", f"{flag_counts.get('timestamp_jump', 0)}")
+
+    with st.expander("Integration report artifact", expanded=False):
+        st.json(integration_report)
+        if not quality_flags.empty:
+            st.subheader("Quality flag sample")
+            st.dataframe(quality_flags.head(20), use_container_width=True, hide_index=True)
 
     st.header("KPI Summary")
     kpi_cols = st.columns(5)
