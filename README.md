@@ -46,6 +46,8 @@ experience teams need ways to transform raw telemetry into actionable insight.
 
 ## Framework architecture
 
+Project structure:
+
 ```text
 sail-racing-telemetry-analytics-demo/
   app.py
@@ -75,6 +77,94 @@ sail-racing-telemetry-analytics-demo/
     test_metrics.py
     test_maneuvers.py
     test_anomalies.py
+```
+
+System flow diagram:
+
+```text
++---------------------------------------------------------------+
+|                     Streamlit Example App                     |
+|                           app.py                              |
+|  (Sidebar controls, sections, live simulation, user workflow) |
++-------------------------------+-------------------------------+
+                                |
+                                v
++---------------------------------------------------------------+
+|                 Ingestion + Schema Normalization              |
+|  sailing_telemetry/ingestion.py                               |
+|  - ingest_telemetry()                                         |
+|  - load_sample_data() / load_csv()                            |
+|                                                               |
+|  sailing_telemetry/schema.py                                  |
+|  - validate_telemetry_dataframe()                             |
+|  - normalize_telemetry_dataframe()                            |
++-------------------------------+-------------------------------+
+                                |
+                                v
++---------------------------------------------------------------+
+|                    Canonical Telemetry DataFrame              |
+|   timestamp, boat_id, team_name, leg_id, leg_mode, ...        |
++-------------------+-------------------+-----------------------+
+                    |                   |
+                    v                   v
+      +---------------------------+   +-------------------------+
+      |      Analytics Engine     |   |       Replay Layer      |
+      | sailing_telemetry/analytics/ | sailing_telemetry/replay.py |
+      | - metrics.py              |   | - get_replay_history()  |
+      | - maneuvers.py            |   | - get_replay_frame()    |
+      | - anomalies.py            |   | - track bounds helpers  |
+      | - vmg.py                  |   +-------------------------+
+      | - weather.py              |
+      | - comparison.py           |
+      +-------------+-------------+
+                    |
+                    v
++---------------------------------------------------------------+
+|                    Visualization Layer                        |
+|             sailing_telemetry/visualization.py               |
+|  - plot_speed_over_time()                                    |
+|  - plot_twa_vs_vmg()                                         |
+|  - plot_race_replay()                                        |
+|  - plot_weather_over_time()                                  |
+|  - plot_team_comparison()                                    |
+|  - plot_anomalies()                                          |
+|  - plot_vmg_bands()                                          |
++-------------------------------+-------------------------------+
+                                |
+                                v
++---------------------------------------------------------------+
+|                     Plotly Figures -> UI                      |
+|            Rendered in app sections/tabs/panels              |
++---------------------------------------------------------------+
+
+Data utilities:
+- sailing_telemetry/generator.py  (simulated telemetry source)
+- sample_data/sailing_telemetry_sample.csv
+- tests/ (schema + analytics validation)
+```
+
+Mobile quick view:
+
+```text
+[Data Source]
+    |
+    v
+[Ingestion] -> [Schema Normalize/Validate]
+    |
+    v
+[Canonical Telemetry DataFrame]
+    |
+    +--> [Analytics Modules]
+    |       - metrics / maneuvers / anomalies
+    |       - vmg / weather / comparison
+    |
+    +--> [Replay Layer]
+    |
+    v
+[Visualization Layer (Plotly Figures)]
+    |
+    v
+[Streamlit App Sections + Live Simulation]
 ```
 
 ## Telemetry schema
