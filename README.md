@@ -37,6 +37,7 @@ experience teams need ways to transform raw telemetry into actionable insight.
 - Source-profile mapping for vendor-style telemetry variants
 - Bronze -> Silver -> Gold cleansing stages
 - Data quality scoring and integration report artifacts
+- Terminal ingestion inspection CLI for stage-by-stage diffs and cleansing visibility
 - Modular analytics for:
   - KPIs and leg summaries
   - maneuver detection and loss estimation
@@ -64,6 +65,8 @@ Project structure:
 ```text
 sail-racing-telemetry-analytics-demo/
   app.py
+  inspect_ingestion.py
+  validate_telemetry_csv.py
   README.md
   requirements.txt
   runtime.txt
@@ -71,9 +74,11 @@ sail-racing-telemetry-analytics-demo/
     sailing_telemetry_sample.csv
   sailing_telemetry/
     __init__.py
+    adapters.py
     schema.py
     generator.py
     ingestion.py
+    source_profiles.py
     replay.py
     visualization.py
     utils.py
@@ -90,6 +95,7 @@ sail-racing-telemetry-analytics-demo/
     test_metrics.py
     test_maneuvers.py
     test_anomalies.py
+    test_ingestion.py
 ```
 
 System flow diagram:
@@ -239,6 +245,39 @@ Optional: run tests
 
 ```bash
 python -m pytest
+```
+
+Optional: inspect ingestion and cleansing in terminal
+
+```bash
+python inspect_ingestion.py sample \
+  --sample-source-profile garmin_csv \
+  --inject-data-issues \
+  --issue-rate 0.03 \
+  --resample-enabled \
+  --resample-seconds 2 \
+  --preview-format vertical \
+  --preview-rows 2 \
+  --diff-preview-rows 2 \
+  --show-quality-flags
+```
+
+This command shows:
+
+- applied transformations (mapping, unit conversions, cleansing, dedupe, resample)
+- bronze/silver/gold row counts and dropped rows
+- stage diffs (`bronze -> silver`, `silver -> gold`) with changed-cell summaries
+- data previews for bronze, silver, gold, and optional quality flags
+
+Optional: inspect an existing CSV source
+
+```bash
+python inspect_ingestion.py sample_data/sailing_telemetry_sample.csv \
+  --source-profile canonical \
+  --resample-enabled \
+  --preview-format table \
+  --preview-rows 2 \
+  --diff-preview-rows 2
 ```
 
 ## How to deploy on Streamlit Community Cloud
